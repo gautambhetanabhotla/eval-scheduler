@@ -1,45 +1,46 @@
 import { createClient } from '@/lib/supabase/server';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import Link from 'next/link';
-
-export async function getCourses() {
-  const supabase = await createClient();
-  const { data, error } = await supabase.from('courses').select('*');
-
-  if (error) {
-    console.error('Error fetching courses:', error);
-    return [];
-  }
-
-  return data;
-}
+import { CoursesClient } from '@/components/courses-client';
 
 export default async function Courses() {
-  const courses = await getCourses();
+  const supabase = await createClient();
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-4xl font-bold">Courses</h2>
-        <Button asChild>
-          <Link href="/courses/new">Create</Link>
-        </Button>
-      </div>
-      {courses.length === 0 ? (
-        <p className="text-muted-foreground">No courses available.</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {courses.map(course => (
-            <Link key={course.code} href={`/courses/${course.code}`}>
-              <Card className="border rounded-lg p-4 bg-card text-card-foreground shadow-sm hover:bg-accent transition-colors cursor-pointer min-h-[9rem] flex flex-col justify-between">
-                <h3 className="text-xl font-semibold">{course.name}</h3>
-                <p className="text-sm text-muted-foreground">{course.code}</p>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  // 1. Get User
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // 2. Fetch All Courses
+  const { data: allCourses, error: coursesError } = await supabase
+    .from('courses')
+    .select('*');
+
+  if (coursesError) {
+    console.error('Error fetching courses:', coursesError);
+    return <div>Error loading courses.</div>;
+  }
+
+  const courses = allCourses || [];
+  const myCourseCodes = new Set<string>();
+
+  if (user) {
+    // 3. Fetch My Enrolments
+    const { data: studentships } = await supabase
+      .from('studentships')
+      .select('course')
+      .eq('student', user.id);
+
+    const { data: taships } = await supabase
+      .from('taships')
+      .select('course')
+      .eq('ta', user.id);
+
+    studentships?.forEach(s => myCourseCodes.add(s.course));
+    taships?.forEach(t => myCourseCodes.add(t.course));
+  }
+
+  // 4. Split
+  const myCourses = courses.filter(c => myCourseCodes.has(c.code));
+  const otherCourses = courses.filter(c => !myCourseCodes.has(c.code));
+
+  return <CoursesClient myCourses={myCourses} otherCourses={otherCourses} />;
 }

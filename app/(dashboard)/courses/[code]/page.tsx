@@ -6,6 +6,8 @@ import {
   ParticipantsTable,
   Participant,
 } from '@/components/participants-table';
+import { EnrollButton } from '@/components/enroll-button';
+import { UnenrollButton } from '@/components/unenroll-button';
 import { Suspense } from 'react';
 
 interface Props {
@@ -20,7 +22,11 @@ export default async function CoursePage({ params }: Props) {
   );
 }
 
-async function CourseContent({ params }: { params: Promise<{ code: string }> }) {
+async function CourseContent({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}) {
   const { code } = await params;
   const decodedCode = decodeURIComponent(code);
   const supabase = await createClient();
@@ -66,21 +72,31 @@ async function CourseContent({ params }: { params: Promise<{ code: string }> }) 
   }
 
   const isTA = tas?.some(ta => ta.ta === user.id);
+  const isStudent = students?.some(s => s.student === user.id);
+  const isEnrolled = isTA || isStudent;
 
   // 5. Combine data for the table
   const participants: Participant[] = [
-    ...(tas?.map(ta => ({
-      id: ta.ta,
-      name: ta.users?.name || 'Unknown',
-      roll_number: ta.users?.rollnumber || 'N/A',
-      role: 'TA' as const,
-    })) || []),
-    ...(students?.map(student => ({
-      id: student.student,
-      name: student.users?.name || 'Unknown',
-      roll_number: student.users?.rollnumber || 'N/A',
-      role: 'Student' as const,
-    })) || []),
+    ...(tas?.map(ta => {
+      const user = Array.isArray(ta.users) ? ta.users[0] : ta.users;
+      return {
+        id: ta.ta,
+        name: user?.name || 'Unknown',
+        roll_number: user?.rollnumber || 'N/A',
+        role: 'TA' as const,
+      };
+    }) || []),
+    ...(students?.map(student => {
+      const user = Array.isArray(student.users)
+        ? student.users[0]
+        : student.users;
+      return {
+        id: student.student,
+        name: user?.name || 'Unknown',
+        roll_number: user?.rollnumber || 'N/A',
+        role: 'Student' as const,
+      };
+    }) || []),
   ];
 
   return (
@@ -90,6 +106,8 @@ async function CourseContent({ params }: { params: Promise<{ code: string }> }) 
           <h1 className="text-3xl font-bold">{course.name}</h1>
           <p className="text-muted-foreground">{course.code}</p>
         </div>
+        {!isEnrolled && <EnrollButton courseCode={course.code} />}
+        {isStudent && <UnenrollButton courseCode={course.code} />}
         {isTA && (
           <Button asChild>
             <Link href={`/courses/${code}/schedule`}>Schedule Evaluations</Link>
