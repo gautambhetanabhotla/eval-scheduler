@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -167,6 +167,7 @@ export async function bookSlot(slotId: string) {
     ta: slot.ta,
     component: slot.component,
     scheduled: slot.start,
+    slot: slotId, // Link to the slot
     duration: Math.floor(
       (new Date(slot.end).getTime() - new Date(slot.start).getTime()) / 60000
     ),
@@ -216,4 +217,177 @@ export async function cancelBooking(slotId: string) {
   }
 
   revalidatePath('/bookings');
+}
+
+// ... existing code ...
+
+// --- Swap Requests ---
+
+export async function createSwapRequest(
+  srcEvalId: string,
+  targetEvalId: string
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  // 1. Verify srcEval belongs to user
+  const { data: src } = await supabase
+    .from('evaluations')
+    .select('student')
+    .eq('id', srcEvalId)
+    .single();
+  if (src?.student !== user.id)
+    return { error: 'You do not own the source slot' };
+
+  const { error } = await supabase.from('swap_requests').insert({
+    src_eval: srcEvalId,
+    target_eval: targetEvalId,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath('/requests');
+  revalidatePath('/courses');
+  return { success: true };
+}
+
+export async function rejectSwapRequest(requestId: string) {
+  const supabase = await createClient();
+  
+  const { error } = await supabase
+    .from('swap_requests')
+    .update({ rejected_at: new Date().toISOString() })
+    .eq('id', requestId);
+
+  if (error) return { error: error.message };
+  revalidatePath('/requests');
+  return { success: true };
+}
+
+export async function acceptSwapRequest(requestId: string) {
+  // Use admin client to bypass RLS for the swap transaction
+  const supabase = await createAdminClient();
+
+  // 1. Fetch Request with full evaluation and slot details
+  const { data: req, error: reqError } = await supabase
+    .from('swap_requests')
+    .select(
+      `
+      *,
+      src:evaluations!src_eval(id, student, slot, scheduled, ta),
+      target:evaluations!target_eval(id, student, slot, scheduled, ta)
+    `
+    )
+    .eq('id', requestId)
+    .single();
+
+  if (reqError || !req) {
+    console.error('Failed to fetch request:', reqError);
+    return { error: 'Request not found' };
+  }
+
+  const evalA = req.src; // Requester's evaluation
+  const evalB = req.target; // Target's evaluation (person accepting)
+  console.dir({ evalA, evalB });
+
+  if (!evalA || !evalB) {
+    return { error: 'Could not find evaluations for this request' };
+  }
+
+  console.log('Swapping:', { evalA, evalB });
+
+  // 2. Swap the slot assignments in evaluations
+  // evalA gets evalB's slot details, evalB gets evalA's slot details
+  const { error: updateAError } = await supabase
+    .from('evaluations')
+    .update({
+      slot: evalB.slot,
+      scheduled: evalB.scheduled,
+      ta: evalB.ta,
+    })
+    .eq('id', evalA.id);
+
+  if (updateAError) {
+    console.error('Failed to update evalA:', updateAError);
+    return { error: 'Failed to update source evaluation' };
+  }
+
+  const { error: updateBError } = await supabase
+    .from('evaluations')
+    .update({
+      slot: evalA.slot,
+      scheduled: evalA.scheduled,
+      ta: evalA.ta,
+    })
+    .eq('id', evalB.id);
+
+  if (updateBError) {
+    console.error('Failed to update evalB:', updateBError);
+    return { error: 'Failed to update target evaluation' };
+  }
+
+  // 3. Swap booked_by in slots
+  // Find slots by ID if available, otherwise by ta+scheduled
+  let slotAId = evalA.slot;
+  let slotBId = evalB.slot;
+
+  if (!slotAId) {
+    const { data: foundSlotA } = await supabase
+      .from('slots')
+      .select('id')
+      .eq('ta', evalA.ta)
+      .eq('start', evalA.scheduled)
+      .single();
+    slotAId = foundSlotA?.id;
+  }
+
+  if (!slotBId) {
+    const { data: foundSlotB } = await supabase
+      .from('slots')
+      .select('id')
+      .eq('ta', evalB.ta)
+      .eq('start', evalB.scheduled)
+      .single();
+    slotBId = foundSlotB?.id;
+  }
+
+  console.log('Swapping slots:', { slotAId, slotBId });
+
+  if (slotAId && slotBId) {
+    const { error: slotAError } = await supabase
+      .from('slots')
+      .update({ booked_by: evalB.student })
+      .eq('id', slotAId);
+    if (slotAError) console.error('Failed to update slotA:', slotAError);
+
+    const { error: slotBError } = await supabase
+      .from('slots')
+      .update({ booked_by: evalA.student })
+      .eq('id', slotBId);
+    if (slotBError) console.error('Failed to update slotB:', slotBError);
+
+    // Also update the slot FK in evaluations if they were null
+    if (!evalA.slot) {
+      await supabase.from('evaluations').update({ slot: slotBId }).eq('id', evalA.id);
+    }
+    if (!evalB.slot) {
+      await supabase.from('evaluations').update({ slot: slotAId }).eq('id', evalB.id);
+    }
+  } else {
+    console.error('Could not find slots to swap');
+  }
+
+  // 4. Mark request accepted
+  await supabase
+    .from('swap_requests')
+    .update({ accepted_at: new Date().toISOString() })
+    .eq('id', requestId);
+
+  revalidatePath('/requests');
+  revalidatePath('/courses');
+  revalidatePath('/bookings');
+  revalidatePath('/evaluations');
+  return { success: true };
 }

@@ -96,14 +96,13 @@ async function CourseContent({
     if (componentIds.length > 0) {
       if (isStudent) {
         // Find if student has a booking to determine "Their TA"
-        console.log("Is student!!");
         console.log(user.id);
         const { data: myBooking } = await supabase
           .from('evaluations')
           .select('ta')
           .eq('student', user.id)
-          .in('component', componentIds).limit(1);
-        console.log("My booking", myBooking);
+          .in('component', componentIds)
+          .limit(1);
 
         if (myBooking && myBooking.length > 0) {
           userTaId = myBooking[0].ta;
@@ -111,11 +110,9 @@ async function CourseContent({
       } else if (isTA) {
         userTaId = user.id;
       }
-      console.log("userTaId:", userTaId);
 
       // If we identified a relevant TA, fetch all their evals for this course
       if (userTaId) {
-        console.log("fucking black nigger");
         const { data: evals } = await supabase
           .from('evaluations')
           .select(

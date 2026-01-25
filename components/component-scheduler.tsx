@@ -73,6 +73,18 @@ export function ComponentScheduler({
       const [hours, minutes] = time.split(':');
       scheduledAt.setHours(parseInt(hours), parseInt(minutes));
 
+      const { error: slotError } = await supabase.from('slots').insert({
+        component: componentId,
+        ta: currentUserId,
+        start: scheduledAt.toISOString(),
+        end: new Date(
+          scheduledAt.getTime() + parseInt(duration) * 60000
+        ).toISOString(),
+        booked_by: selectedStudent,
+      });
+
+      if (slotError) throw slotError;
+
       const { error } = await supabase.from('evaluations').insert({
         component: componentId,
         student: selectedStudent,
