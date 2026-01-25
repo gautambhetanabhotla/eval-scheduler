@@ -43,6 +43,7 @@ export default async function EvaluationsPage() {
     `
     )
     .or(`student.eq.${user.id},ta.eq.${user.id}`)
+    .eq('active', true)
     .order('scheduled', { ascending: true });
 
   return (

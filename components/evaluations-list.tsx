@@ -150,7 +150,7 @@ export function EvaluationsList({
           ) : (
             <div className="text-center py-12 border rounded-lg bg-muted/20">
               <p className="text-muted-foreground">
-                No evaluations found matching your filters.
+                No active evaluations found matching your filters.
               </p>
             </div>
           )}
@@ -176,7 +176,7 @@ function TimelineView({
     return (
       <div className="text-center py-12 border rounded-lg bg-muted/20">
         <p className="text-muted-foreground">
-          No evaluations found matching your filters.
+          No active evaluations found matching your filters.
         </p>
       </div>
     );
