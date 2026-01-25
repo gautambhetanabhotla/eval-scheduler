@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { updateEvaluationStatus } from '@/app/actions';
 import { toast } from 'sonner';
+import { Clock, AlertTriangle, CheckCircle, Timer } from 'lucide-react';
 
 interface Evaluation {
   id: string;
@@ -49,6 +50,135 @@ function getStatusVariant(status: string) {
   }
 }
 
+interface ScheduleStatus {
+  type: 'ahead' | 'behind' | 'on_time' | 'idle';
+  delayMinutes: number;
+  currentEval: Evaluation | null;
+  nextEval: Evaluation | null;
+}
+
+function calculateScheduleStatus(evaluations: Evaluation[]): ScheduleStatus {
+  // Sort by scheduled time
+  const sorted = [...evaluations].sort(
+    (a, b) => new Date(a.scheduled).getTime() - new Date(b.scheduled).getTime()
+  );
+
+  // Find the current ongoing evaluation
+  const ongoingIndex = sorted.findIndex(ev => ev.status === 'ongoing');
+
+  if (ongoingIndex === -1) {
+    // No ongoing eval - check if we're idle or haven't started
+    const now = Date.now();
+    const nextNotStarted = sorted.find(ev => ev.status === 'not_started');
+
+    if (nextNotStarted) {
+      const nextStart = new Date(nextNotStarted.scheduled).getTime();
+      if (now > nextStart) {
+        // We should have started but haven't - we're behind
+        const delayMs = now - nextStart;
+        return {
+          type: 'behind',
+          delayMinutes: Math.floor(delayMs / 60000),
+          currentEval: null,
+          nextEval: nextNotStarted,
+        };
+      }
+    }
+
+    return {
+      type: 'idle',
+      delayMinutes: 0,
+      currentEval: null,
+      nextEval: nextNotStarted || null,
+    };
+  }
+
+  const currentEval = sorted[ongoingIndex];
+  const nextEval = sorted[ongoingIndex + 1] || null;
+
+  if (!nextEval) {
+    // Last evaluation - no delay calculation possible
+    return { type: 'on_time', delayMinutes: 0, currentEval, nextEval: null };
+  }
+
+  // Calculate when current eval should end
+  const currentStart = new Date(currentEval.scheduled).getTime();
+  const currentExpectedEnd = currentStart + currentEval.duration * 60000;
+  const nextStart = new Date(nextEval.scheduled).getTime();
+
+  const delayMs = currentExpectedEnd - nextStart;
+  const delayMinutes = Math.round(delayMs / 60000);
+
+  if (delayMinutes > 2) {
+    return { type: 'behind', delayMinutes, currentEval, nextEval };
+  } else if (delayMinutes < -2) {
+    return {
+      type: 'ahead',
+      delayMinutes: Math.abs(delayMinutes),
+      currentEval,
+      nextEval,
+    };
+  } else {
+    return { type: 'on_time', delayMinutes: 0, currentEval, nextEval };
+  }
+}
+
+function ScheduleIndicator({ status }: { status: ScheduleStatus }) {
+  if (status.type === 'idle') {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground text-sm p-3 bg-muted/50 rounded-lg">
+        <Timer className="w-4 h-4" />
+        <span>
+          {status.nextEval
+            ? `Next evaluation starts at ${format(new Date(status.nextEval.scheduled), 'p')}`
+            : 'All evaluations completed'}
+        </span>
+      </div>
+    );
+  }
+
+  if (status.type === 'behind') {
+    return (
+      <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400 text-sm p-3 bg-orange-100 dark:bg-orange-950/30 rounded-lg">
+        <AlertTriangle className="w-4 h-4" />
+        <span>
+          Running <strong>{status.delayMinutes} min</strong> behind schedule
+          {status.currentEval && (
+            <span className="text-muted-foreground ml-1">
+              • Currently: {status.currentEval.student?.name}
+            </span>
+          )}
+        </span>
+      </div>
+    );
+  }
+
+  if (status.type === 'ahead') {
+    return (
+      <div className="flex items-center gap-2 text-green-600 dark:text-green-400 text-sm p-3 bg-green-100 dark:bg-green-950/30 rounded-lg">
+        <CheckCircle className="w-4 h-4" />
+        <span>
+          Running <strong>{status.delayMinutes} min</strong> ahead of schedule
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 text-sm p-3 bg-blue-100 dark:bg-blue-950/30 rounded-lg">
+      <Clock className="w-4 h-4" />
+      <span>
+        On schedule
+        {status.currentEval && (
+          <span className="text-muted-foreground ml-1">
+            • Currently: {status.currentEval.student?.name}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
 export function RealtimeEvaluationsList({
   initialEvaluations,
   componentIds,
@@ -56,8 +186,22 @@ export function RealtimeEvaluationsList({
   isTA,
   isStudent,
 }: Props) {
-  const [evaluations, setEvaluations] = useState<Evaluation[]>(initialEvaluations);
+  const [evaluations, setEvaluations] =
+    useState<Evaluation[]>(initialEvaluations);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+
+  // Recalculate schedule status when evaluations change
+  const scheduleStatus = useMemo(
+    () => calculateScheduleStatus(evaluations),
+    [evaluations]
+  );
+
+  // Update the "behind schedule" calculation every minute
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -147,8 +291,14 @@ export function RealtimeEvaluationsList({
   return (
     <div className="border rounded-lg p-6 bg-card text-card-foreground shadow-sm">
       <h2 className="text-xl font-semibold mb-4">
-        Scheduled evaluations {isStudent ? 'under your TA' : ''} ({evaluations.length})
+        Scheduled evaluations {isStudent ? 'under your TA' : ''} (
+        {evaluations.length})
       </h2>
+
+      <div className="mb-4">
+        <ScheduleIndicator status={scheduleStatus} />
+      </div>
+
       <div className="space-y-4">
         {evaluations.map(evalItem => (
           <div
@@ -169,7 +319,9 @@ export function RealtimeEvaluationsList({
               {isTA ? (
                 <Select
                   value={evalItem.status}
-                  onValueChange={value => handleStatusChange(evalItem.id, value)}
+                  onValueChange={value =>
+                    handleStatusChange(evalItem.id, value)
+                  }
                   disabled={updatingId === evalItem.id}
                 >
                   <SelectTrigger className="w-[140px]">
