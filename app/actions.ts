@@ -100,3 +100,120 @@ export async function enrollStudentByRollNumber(
 
   revalidatePath(`/courses/${courseCode}`);
 }
+
+export async function createSlots(
+  componentId: string,
+  start: string,
+  end: string,
+  count: number
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Unauthorized');
+
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
+  const duration = endTime - startTime;
+  const slotDuration = duration / count;
+
+  const slots = [];
+  for (let i = 0; i < count; i++) {
+    const s = new Date(startTime + i * slotDuration);
+    const e = new Date(startTime + (i + 1) * slotDuration);
+    slots.push({
+      component: componentId,
+      ta: user.id,
+      start: s.toISOString(),
+      end: e.toISOString(),
+    });
+  }
+
+  const { error } = await supabase.from('slots').insert(slots);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath('/bookings');
+}
+
+export async function bookSlot(slotId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Unauthorized');
+
+  // We must chain .select().single() to get the updated row back
+  const { data: slot, error: slotError } = await supabase
+    .from('slots')
+    .update({ booked_by: user.id })
+    .eq('id', slotId)
+    .is('booked_by', null) // Ensure it's not already booked
+    .select()
+    .single();
+
+  if (slotError || !slot) {
+    throw new Error(slotError?.message || 'Could not book slot (maybe taken?)');
+  }
+
+  // Insert Evaluation
+  const { error: evalError } = await supabase.from('evaluations').insert({
+    student: user.id,
+    ta: slot.ta,
+    component: slot.component,
+    scheduled: slot.start,
+    duration: Math.floor(
+      (new Date(slot.end).getTime() - new Date(slot.start).getTime()) / 60000
+    ),
+    status: 'not_started',
+  });
+
+  if (evalError) {
+    console.error('Eval creation failed', evalError);
+    // Ideally revert slot booking here
+  }
+
+  revalidatePath('/bookings');
+}
+
+export async function cancelBooking(slotId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error('Unauthorized');
+
+  const { error } = await supabase
+    .from('slots')
+    .update({ booked_by: null })
+    .eq('id', slotId)
+    .eq('booked_by', user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  // Fetch slot details to find evaluation (even though we unbooked it)
+  const { data: slotData } = await supabase
+    .from('slots')
+    .select('component, start')
+    .eq('id', slotId)
+    .single();
+
+  if (slotData) {
+    await supabase
+      .from('evaluations')
+      .delete()
+      .eq('student', user.id)
+      .eq('component', slotData.component)
+      .eq('scheduled', slotData.start);
+  }
+
+  revalidatePath('/bookings');
+}

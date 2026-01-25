@@ -28,6 +28,9 @@ export function DashboardLayoutClient({
           <TabsTrigger value="courses" asChild>
             <Link href="/courses">Courses</Link>
           </TabsTrigger>
+          <TabsTrigger value="bookings" asChild>
+            <Link href="/bookings">Bookings</Link>
+          </TabsTrigger>
         </TabsList>
 
         <div className="flex-1 md:ml-6 h-full">{children}</div>
