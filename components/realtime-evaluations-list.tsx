@@ -64,64 +64,67 @@ function calculateScheduleStatus(evaluations: Evaluation[]): ScheduleStatus {
     (a, b) => new Date(a.scheduled).getTime() - new Date(b.scheduled).getTime()
   );
 
-  // Find the current ongoing evaluation
-  const ongoingIndex = sorted.findIndex(ev => ev.status === 'ongoing');
+  const now = Date.now();
 
-  if (ongoingIndex === -1) {
-    // No ongoing eval - check if we're idle or haven't started
-    const now = Date.now();
-    const nextNotStarted = sorted.find(ev => ev.status === 'not_started');
+  // Find the first evaluation that is NOT done (could be ongoing or not_started)
+  const firstActiveIndex = sorted.findIndex(ev => ev.status !== 'done');
 
-    if (nextNotStarted) {
-      const nextStart = new Date(nextNotStarted.scheduled).getTime();
-      if (now > nextStart) {
-        // We should have started but haven't - we're behind
-        const delayMs = now - nextStart;
-        return {
-          type: 'behind',
-          delayMinutes: Math.floor(delayMs / 60000),
-          currentEval: null,
-          nextEval: nextNotStarted,
-        };
-      }
-    }
-
+  // If all are done or list is empty
+  if (firstActiveIndex === -1) {
     return {
       type: 'idle',
       delayMinutes: 0,
       currentEval: null,
-      nextEval: nextNotStarted || null,
+      nextEval: null,
     };
   }
 
-  const currentEval = sorted[ongoingIndex];
-  const nextEval = sorted[ongoingIndex + 1] || null;
+  const firstActive = sorted[firstActiveIndex];
+  const scheduledStart = new Date(firstActive.scheduled).getTime();
+  const scheduledEnd = scheduledStart + firstActive.duration * 60000;
 
-  if (!nextEval) {
-    // Last evaluation - no delay calculation possible
-    return { type: 'on_time', delayMinutes: 0, currentEval, nextEval: null };
+  // CASE 1: First active eval is 'not_started'
+  if (firstActive.status === 'not_started') {
+    if (now > scheduledStart) {
+      // Should have started already - we're behind
+      const delayMinutes = Math.floor((now - scheduledStart) / 60000);
+      return {
+        type: 'behind',
+        delayMinutes,
+        currentEval: null,
+        nextEval: firstActive,
+      };
+    }
+    // Still waiting for it to start
+    return {
+      type: 'idle',
+      delayMinutes: 0,
+      currentEval: null,
+      nextEval: firstActive,
+    };
   }
 
-  // Calculate when current eval should end
-  const currentStart = new Date(currentEval.scheduled).getTime();
-  const currentExpectedEnd = currentStart + currentEval.duration * 60000;
-  const nextStart = new Date(nextEval.scheduled).getTime();
+  // CASE 2: First active eval is 'ongoing'
+  const nextEval = sorted[firstActiveIndex + 1] || null;
 
-  const delayMs = currentExpectedEnd - nextStart;
-  const delayMinutes = Math.round(delayMs / 60000);
-
-  if (delayMinutes > 2) {
-    return { type: 'behind', delayMinutes, currentEval, nextEval };
-  } else if (delayMinutes < -2) {
+  // Check if we've overrun the scheduled end time
+  if (now > scheduledEnd) {
+    const delayMinutes = Math.floor((now - scheduledEnd) / 60000);
     return {
-      type: 'ahead',
-      delayMinutes: Math.abs(delayMinutes),
-      currentEval,
+      type: 'behind',
+      delayMinutes,
+      currentEval: firstActive,
       nextEval,
     };
-  } else {
-    return { type: 'on_time', delayMinutes: 0, currentEval, nextEval };
   }
+
+  // Within the scheduled window - on time
+  return {
+    type: 'on_time',
+    delayMinutes: 0,
+    currentEval: firstActive,
+    nextEval,
+  };
 }
 
 function ScheduleIndicator({ status }: { status: ScheduleStatus }) {

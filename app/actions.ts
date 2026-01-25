@@ -556,7 +556,7 @@ export async function deactivateEvaluation(evaluationId: string) {
   // Verify user is the TA for this evaluation
   const { data: evaluation } = await supabase
     .from('evaluations')
-    .select('ta, status')
+    .select('ta, status, slot')
     .eq('id', evaluationId)
     .single();
 
@@ -574,6 +574,22 @@ export async function deactivateEvaluation(evaluationId: string) {
     .eq('id', evaluationId);
 
   if (error) return { error: error.message };
+
+  // Delete the associated slot if it exists
+  if (evaluation.slot) {
+    const { error: deleteError } = await supabase
+      .from('slots')
+      .delete()
+      .eq('id', evaluation.slot);
+
+    if (deleteError) {
+      console.error(
+        'Failed to delete slot for deactivated evaluation:',
+        deleteError
+      );
+      // We don't return an error here because the main action (deactivate) succeeded
+    }
+  }
 
   return { success: true };
 }
