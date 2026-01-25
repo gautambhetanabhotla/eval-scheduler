@@ -19,13 +19,21 @@ export function MobileNav() {
   const segment = useSelectedLayoutSegment();
   const activeSegment = segment || 'evaluations';
 
-  const NavItem = ({ href, label, current }: { href: string; label: string; current: string }) => (
+  const NavItem = ({
+    href,
+    label,
+    current,
+  }: {
+    href: string;
+    label: string;
+    current: string;
+  }) => (
     <Link
       href={href}
       onClick={() => setOpen(false)}
       className={cn(
-        "text-sm font-medium transition-colors hover:text-primary",
-        activeSegment === current ? "text-primary" : "text-muted-foreground"
+        'text-sm font-medium transition-colors hover:text-primary',
+        activeSegment === current ? 'text-primary' : 'text-muted-foreground'
       )}
     >
       {label}
@@ -45,7 +53,11 @@ export function MobileNav() {
           <SheetTitle className="text-left">Eval Scheduler</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-4 py-4">
-          <NavItem href="/evaluations" label="Evaluations" current="evaluations" />
+          <NavItem
+            href="/evaluations"
+            label="Evaluations"
+            current="evaluations"
+          />
           <NavItem href="/requests" label="Requests" current="requests" />
           <NavItem href="/courses" label="Courses" current="courses" />
         </div>

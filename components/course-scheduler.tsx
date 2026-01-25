@@ -109,11 +109,12 @@ export function CourseScheduler({
     scheduledAt.setHours(parseInt(hours), parseInt(minutes));
 
     const { error } = await supabase.from('evaluations').insert({
-      component_id: selectedComponentId,
-      student_id: selectedStudent,
-      ta_id: currentUserId,
-      duration_minutes: parseInt(duration),
-      scheduled_at: scheduledAt.toISOString(),
+      component: selectedComponentId,
+      student: selectedStudent,
+      ta: currentUserId,
+      duration: parseInt(duration),
+      scheduled: scheduledAt.toISOString(),
+      start: scheduledAt.toISOString(),
     });
 
     setIsSubmitting(false);
@@ -121,7 +122,7 @@ export function CourseScheduler({
     if (error) {
       alert('Error scheduling evaluation: ' + error.message);
     } else {
-      alert('Evaluation scheduled successfully!');
+      //   alert('Evaluation scheduled successfully!');
       // Reset form or navigate
       setSelectedStudent('');
       router.refresh();

@@ -4,7 +4,11 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import { useSelectedLayoutSegment } from 'next/navigation';
 
-export function DashboardLayoutClient({ children }: { children: React.ReactNode }) {
+export function DashboardLayoutClient({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const segment = useSelectedLayoutSegment();
 
   return (

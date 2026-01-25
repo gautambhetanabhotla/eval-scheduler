@@ -1,3 +1,5 @@
+import { AddComponentDialog } from '@/components/add-component-dialog';
+import { EnrollStudentDialog } from '@/components/enroll-student-dialog';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -109,9 +111,15 @@ async function CourseContent({
         {!isEnrolled && <EnrollButton courseCode={course.code} />}
         {isStudent && <UnenrollButton courseCode={course.code} />}
         {isTA && (
-          <Button asChild>
-            <Link href={`/courses/${code}/schedule`}>Schedule Evaluations</Link>
-          </Button>
+          <div className="flex gap-2">
+            <EnrollStudentDialog courseCode={decodedCode} />
+            <AddComponentDialog courseCode={decodedCode} />
+            <Button asChild>
+              <Link href={`/courses/${decodedCode}/schedule`}>
+                Schedule Evaluations
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 
