@@ -183,6 +183,9 @@ export default async function RequestsPage() {
                   Request from {req.src_eval?.student?.name} (
                   {req.src_eval?.student?.rollnumber})
                 </CardDescription>
+                <CardDescription>
+                  Reason: {req.reason || 'Not provided'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between text-sm mb-4">

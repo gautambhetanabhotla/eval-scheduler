@@ -11,9 +11,7 @@ import {
 import { EnrollButton } from '@/components/enroll-button';
 import { UnenrollButton } from '@/components/unenroll-button';
 import { Suspense } from 'react';
-import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RealtimeEvaluationsList } from '@/components/realtime-evaluations-list';
 
 interface Props {
   params: Promise<{ code: string }>;
@@ -81,8 +79,10 @@ async function CourseContent({
   const isEnrolled = isTA || isStudent;
 
   // 5. Fetch Scheduled Evaluations (if student or TA)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let scheduledEvaluations: any[] = [];
   let userTaId: string | null = null;
+  let componentIds: string[] = [];
 
   if (isEnrolled) {
     // Get components for this course to filter evals
@@ -91,12 +91,11 @@ async function CourseContent({
       .select('id')
       .eq('course', decodedCode);
 
-    const componentIds = components?.map(c => c.id) || [];
+    componentIds = components?.map(c => c.id) || [];
 
     if (componentIds.length > 0) {
       if (isStudent) {
         // Find if student has a booking to determine "Their TA"
-        console.log(user.id);
         const { data: myBooking } = await supabase
           .from('evaluations')
           .select('ta')
@@ -131,7 +130,6 @@ async function CourseContent({
           .order('scheduled', { ascending: true });
 
         scheduledEvaluations = evals || [];
-        console.dir(scheduledEvaluations);
       }
     }
   }
@@ -182,50 +180,22 @@ async function CourseContent({
         )}
       </div>
 
+      {userTaId && componentIds.length > 0 && (
+        <RealtimeEvaluationsList
+          initialEvaluations={scheduledEvaluations}
+          componentIds={componentIds}
+          taId={userTaId}
+          isTA={isTA ?? false}
+          isStudent={isStudent ?? false}
+        />
+      )}
+
       <div className="border rounded-lg p-6 bg-card text-card-foreground shadow-sm">
         <h2 className="text-xl font-semibold mb-4">
           Participants ({participants.length})
         </h2>
         <ParticipantsTable data={participants} />
       </div>
-
-      {scheduledEvaluations.length > 0 && (
-        <div className="border rounded-lg p-6 bg-card text-card-foreground shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">
-            Scheduled Evaluations{' '}
-            {userTaId && isStudent ? '(Under Your TA)' : ''} (
-            {scheduledEvaluations.length})
-          </h2>
-          <div className="space-y-4">
-            {scheduledEvaluations.map(evalItem => (
-              <div
-                key={evalItem.id}
-                className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
-              >
-                <div>
-                  <p className="font-medium">
-                    {evalItem.student?.name || 'Unknown Student'} (
-                    {evalItem.student?.rollnumber || 'N/A'})
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {evalItem.component?.name} •{' '}
-                    {format(new Date(evalItem.scheduled), 'PP p')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
-                      evalItem.status === 'completed' ? 'default' : 'secondary'
-                    }
-                  >
-                    {evalItem.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

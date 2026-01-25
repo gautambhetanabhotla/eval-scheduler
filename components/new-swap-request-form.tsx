@@ -14,6 +14,7 @@ import { createSwapRequest } from '@/app/actions';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ArrowRight, Plus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface Evaluation {
   id: string;
@@ -39,6 +40,7 @@ export function NewSwapRequestForm({ myEvaluations, otherEvaluations }: Props) {
   const [targetEvalId, setTargetEvalId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [reason, setReason] = useState('');
 
   const handleSubmit = async () => {
     if (!srcEvalId || !targetEvalId) {
@@ -53,7 +55,7 @@ export function NewSwapRequestForm({ myEvaluations, otherEvaluations }: Props) {
 
     setLoading(true);
     try {
-      const result = await createSwapRequest(srcEvalId, targetEvalId);
+      const result = await createSwapRequest(srcEvalId, targetEvalId, reason);
       if (result?.error) throw new Error(result.error);
       toast.success('Swap request sent!');
       setSrcEvalId('');
@@ -130,6 +132,14 @@ export function NewSwapRequestForm({ myEvaluations, otherEvaluations }: Props) {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div>
+          <Input
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Reason for swap (optional)"
+          />
         </div>
 
         <div className="flex gap-2 justify-end">

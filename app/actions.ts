@@ -225,7 +225,8 @@ export async function cancelBooking(slotId: string) {
 
 export async function createSwapRequest(
   srcEvalId: string,
-  targetEvalId: string
+  targetEvalId: string,
+  reason: string
 ) {
   const supabase = await createClient();
   const {
@@ -245,6 +246,7 @@ export async function createSwapRequest(
   const { error } = await supabase.from('swap_requests').insert({
     src_eval: srcEvalId,
     target_eval: targetEvalId,
+    reason,
   });
 
   if (error) return { error: error.message };
@@ -255,7 +257,7 @@ export async function createSwapRequest(
 
 export async function rejectSwapRequest(requestId: string) {
   const supabase = await createClient();
-  
+
   const { error } = await supabase
     .from('swap_requests')
     .update({ rejected_at: new Date().toISOString() })
@@ -370,10 +372,16 @@ export async function acceptSwapRequest(requestId: string) {
 
     // Also update the slot FK in evaluations if they were null
     if (!evalA.slot) {
-      await supabase.from('evaluations').update({ slot: slotBId }).eq('id', evalA.id);
+      await supabase
+        .from('evaluations')
+        .update({ slot: slotBId })
+        .eq('id', evalA.id);
     }
     if (!evalB.slot) {
-      await supabase.from('evaluations').update({ slot: slotAId }).eq('id', evalB.id);
+      await supabase
+        .from('evaluations')
+        .update({ slot: slotAId })
+        .eq('id', evalB.id);
     }
   } else {
     console.error('Could not find slots to swap');
@@ -389,5 +397,48 @@ export async function acceptSwapRequest(requestId: string) {
   revalidatePath('/courses');
   revalidatePath('/bookings');
   revalidatePath('/evaluations');
+  return { success: true };
+}
+
+export async function updateEvaluationStatus(
+  evaluationId: string,
+  status: 'not_started' | 'ongoing' | 'done'
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Not authenticated' };
+
+  // Verify user is the TA for this evaluation
+  const { data: evaluation } = await supabase
+    .from('evaluations')
+    .select('ta, status, start, end')
+    .eq('id', evaluationId)
+    .single();
+
+  if (evaluation?.ta !== user.id) {
+    return { error: 'Only the assigned TA can update status' };
+  }
+
+  const oldStatus = evaluation?.status;
+  let startTime = evaluation?.start;
+  let endTime = evaluation?.end;
+
+  if (oldStatus !== status && status === 'done') {
+    endTime = new Date().toISOString();
+  } else if (oldStatus !== status && status === 'ongoing') {
+    startTime = new Date().toISOString();
+  }
+
+  const { error } = await supabase
+    .from('evaluations')
+    .update({ status, start: startTime, end: endTime })
+    .eq('id', evaluationId);
+
+  if (error) return { error: error.message };
+
+  // Don't revalidate - let realtime handle the UI update
   return { success: true };
 }
