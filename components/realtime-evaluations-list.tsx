@@ -11,9 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { updateEvaluationStatus } from '@/app/actions';
+import { updateEvaluationStatus, deactivateEvaluation } from '@/app/actions';
 import { toast } from 'sonner';
-import { Clock, AlertTriangle, CheckCircle, Timer } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle, Timer, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Evaluation {
   id: string;
@@ -189,6 +190,7 @@ export function RealtimeEvaluationsList({
   const [evaluations, setEvaluations] =
     useState<Evaluation[]>(initialEvaluations);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
   // Recalculate schedule status when evaluations change
@@ -284,6 +286,24 @@ export function RealtimeEvaluationsList({
     }
   };
 
+  const handleDeactivate = async (evalId: string) => {
+    setDeactivatingId(evalId);
+    try {
+      const result = await deactivateEvaluation(evalId);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        // Remove from local state since it's no longer active
+        setEvaluations(prev => prev.filter(ev => ev.id !== evalId));
+        toast.success('Evaluation deactivated');
+      }
+    } catch {
+      toast.error('Failed to deactivate evaluation');
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
   if (evaluations.length === 0) {
     return null;
   }
@@ -317,24 +337,37 @@ export function RealtimeEvaluationsList({
             </div>
             <div className="flex items-center gap-2">
               {isTA ? (
-                <Select
-                  value={evalItem.status}
-                  onValueChange={value =>
-                    handleStatusChange(evalItem.id, value)
-                  }
-                  disabled={updatingId === evalItem.id}
-                >
-                  <SelectTrigger className="w-[140px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Select
+                    value={evalItem.status}
+                    onValueChange={value =>
+                      handleStatusChange(evalItem.id, value)
+                    }
+                    disabled={updatingId === evalItem.id}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {evalItem.status === 'done' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeactivate(evalItem.id)}
+                      disabled={deactivatingId === evalItem.id}
+                      title="Deactivate evaluation"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </>
               ) : (
                 <Badge variant={getStatusVariant(evalItem.status)}>
                   {evalItem.status.replace('_', ' ')}

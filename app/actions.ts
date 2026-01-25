@@ -51,6 +51,108 @@ export async function unenrollFromCourse(courseCode: string) {
   revalidatePath('/courses');
 }
 
+export async function promoteToTA(courseCode: string, userId: string) {
+  const supabase = await createClient();
+  const adminClient = await createAdminClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Not authenticated' };
+
+  // Verify current user is a TA for this course
+  const { data: taship } = await supabase
+    .from('taships')
+    .select('ta')
+    .eq('course', courseCode)
+    .eq('ta', user.id)
+    .single();
+
+  if (!taship) {
+    return { error: 'Only TAs can promote users' };
+  }
+
+  // Remove from studentships if exists (use admin client to bypass RLS)
+  const { error: deleteError } = await adminClient
+    .from('studentships')
+    .delete()
+    .eq('student', userId)
+    .eq('course', courseCode);
+
+  if (deleteError) {
+    return { error: `Failed to remove studentship: ${deleteError.message}` };
+  }
+
+  // Add to taships
+  const { error } = await adminClient.from('taships').insert({
+    ta: userId,
+    course: courseCode,
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'User is already a TA' };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/courses/${courseCode}`);
+  return { success: true };
+}
+
+export async function demoteToStudent(courseCode: string, userId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Not authenticated' };
+
+  // Can't demote yourself
+  if (user.id === userId) {
+    return { error: 'You cannot demote yourself' };
+  }
+
+  // Verify current user is a TA for this course
+  const { data: taship } = await supabase
+    .from('taships')
+    .select('ta')
+    .eq('course', courseCode)
+    .eq('ta', user.id)
+    .single();
+
+  if (!taship) {
+    return { error: 'Only TAs can demote users' };
+  }
+
+  // Remove from taships
+  const { error: deleteError } = await supabase
+    .from('taships')
+    .delete()
+    .eq('ta', userId)
+    .eq('course', courseCode);
+
+  if (deleteError) {
+    return { error: deleteError.message };
+  }
+
+  // Add to studentships
+  const { error } = await supabase.from('studentships').insert({
+    student: userId,
+    course: courseCode,
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'User is already a student' };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/courses/${courseCode}`);
+  return { success: true };
+}
+
 export async function createComponent(courseCode: string, name: string) {
   const supabase = await createClient();
 
@@ -440,5 +542,38 @@ export async function updateEvaluationStatus(
   if (error) return { error: error.message };
 
   // Don't revalidate - let realtime handle the UI update
+  return { success: true };
+}
+
+export async function deactivateEvaluation(evaluationId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Not authenticated' };
+
+  // Verify user is the TA for this evaluation
+  const { data: evaluation } = await supabase
+    .from('evaluations')
+    .select('ta, status')
+    .eq('id', evaluationId)
+    .single();
+
+  if (evaluation?.ta !== user.id) {
+    return { error: 'Only the assigned TA can deactivate this evaluation' };
+  }
+
+  if (evaluation?.status !== 'done') {
+    return { error: 'Only completed evaluations can be deactivated' };
+  }
+
+  const { error } = await supabase
+    .from('evaluations')
+    .update({ active: false })
+    .eq('id', evaluationId);
+
+  if (error) return { error: error.message };
+
   return { success: true };
 }

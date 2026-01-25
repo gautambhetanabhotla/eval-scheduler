@@ -126,6 +126,7 @@ async function CourseContent({
           `
           )
           .eq('ta', userTaId)
+          .eq('active', true)
           .in('component', componentIds)
           .order('scheduled', { ascending: true });
 
@@ -194,7 +195,12 @@ async function CourseContent({
         <h2 className="text-xl font-semibold mb-4">
           Participants ({participants.length})
         </h2>
-        <ParticipantsTable data={participants} />
+        <ParticipantsTable
+          data={participants}
+          isTA={isTA}
+          courseCode={decodedCode}
+          currentUserId={user.id}
+        />
       </div>
     </div>
   );

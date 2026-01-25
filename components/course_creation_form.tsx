@@ -31,6 +31,11 @@ export default function CourseCreationForm() {
       setSuccess(null);
     } else {
       setSuccess('Course created successfully!');
+      await supabase
+        .from('taships')
+        .insert([
+          { course: code, ta: (await supabase.auth.getUser()).data.user?.id },
+        ]);
       setError(null);
       setName('');
       setCode('');

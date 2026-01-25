@@ -13,7 +13,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, MoreHorizontal } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,8 +29,11 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { promoteToTA, demoteToStudent } from '@/app/actions';
+import { toast } from 'sonner';
 
 export type Participant = {
   id: string;
@@ -39,27 +42,110 @@ export type Participant = {
   role: 'TA' | 'Student';
 };
 
-export const columns: ColumnDef<Participant>[] = [
-  {
-    accessorKey: 'name',
-    header: 'Name',
-    cell: ({ row }) => <div className="capitalize">{row.getValue('name')}</div>,
-  },
-  {
-    accessorKey: 'roll_number',
-    header: 'Roll Number',
-    cell: ({ row }) => (
-      <div className="lowercase">{row.getValue('roll_number')}</div>
-    ),
-  },
-  {
-    accessorKey: 'role',
-    header: 'Role',
-    cell: ({ row }) => <div className="capitalize">{row.getValue('role')}</div>,
-  },
-];
+interface ParticipantsTableProps {
+  data: Participant[];
+  isTA?: boolean;
+  courseCode?: string;
+  currentUserId?: string;
+}
 
-export function ParticipantsTable({ data }: { data: Participant[] }) {
+function createColumns(
+  isTA: boolean,
+  courseCode: string,
+  currentUserId: string,
+  onAction: () => void
+): ColumnDef<Participant>[] {
+  const baseColumns: ColumnDef<Participant>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Name',
+      cell: ({ row }) => (
+        <div className="capitalize">{row.getValue('name')}</div>
+      ),
+    },
+    {
+      accessorKey: 'roll_number',
+      header: 'Roll Number',
+      cell: ({ row }) => (
+        <div className="lowercase">{row.getValue('roll_number')}</div>
+      ),
+    },
+    {
+      accessorKey: 'role',
+      header: 'Role',
+      cell: ({ row }) => (
+        <div className="capitalize">{row.getValue('role')}</div>
+      ),
+    },
+  ];
+
+  if (isTA && courseCode) {
+    baseColumns.push({
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => {
+        const participant = row.original;
+        const isSelf = participant.id === currentUserId;
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" disabled={isSelf}>
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {participant.role === 'Student' ? (
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const result = await promoteToTA(
+                      courseCode,
+                      participant.id
+                    );
+                    if (result.error) {
+                      toast.error(result.error);
+                    } else {
+                      toast.success(`${participant.name} is now a TA`);
+                      onAction();
+                    }
+                  }}
+                >
+                  Promote to TA
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const result = await demoteToStudent(
+                      courseCode,
+                      participant.id
+                    );
+                    if (result.error) {
+                      toast.error(result.error);
+                    } else {
+                      toast.success(`${participant.name} is now a Student`);
+                      onAction();
+                    }
+                  }}
+                >
+                  Demote to Student
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    });
+  }
+
+  return baseColumns;
+}
+
+export function ParticipantsTable({
+  data,
+  isTA = false,
+  courseCode = '',
+  currentUserId = '',
+}: ParticipantsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -67,6 +153,12 @@ export function ParticipantsTable({ data }: { data: Participant[] }) {
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
+  const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+
+  const columns = React.useMemo(
+    () => createColumns(isTA, courseCode, currentUserId, forceUpdate),
+    [isTA, courseCode, currentUserId]
+  );
 
   const table = useReactTable({
     data,
