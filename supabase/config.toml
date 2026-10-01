@@ -1,8 +1,15 @@
-[auth]
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/**"]
-jwt_secret = "super-secret-jwt-token-with-at-least-32-characters-long"
+# Supabase local project configuration
+# Replace the placeholder values below with your own project details.
+
+project_id = "eval-scheduler"
 
 [realtime]
 enabled = true
-# ip_version = "ipv4"
+
+[db.migrations]
+schema_paths = [
+  "schemas",
+]
+
+[experimental.pgdelta]
+enabled = true

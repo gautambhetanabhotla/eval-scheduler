@@ -1,7 +1,7 @@
-import { Modal } from '@/components/modal';
+import { Modal } from './modal';
 import { DialogDescription, DialogTitle } from '@radix-ui/react-dialog';
 
-import CourseCreationForm from '@/components/course_creation_form';
+import CourseCreationForm from '@/app/(dashboard)/courses/new/course_creation_form';
 import { HelperMessage } from '@/components/helper-message';
 
 export default function NewCourseModal() {

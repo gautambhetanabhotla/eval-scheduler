@@ -1,8 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import {
-  EvaluationsList,
-  type Evaluation,
-} from '@/components/evaluations-list';
+import { EvaluationsList, type Evaluation } from './evaluations-list';
 
 export default async function EvaluationsPage() {
   const supabase = await createClient();

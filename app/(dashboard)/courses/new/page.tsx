@@ -2,7 +2,7 @@
 
 // import Link from 'next/link';
 // import { Button } from '@/components/ui/button';
-import CourseCreationForm from '@/components/course_creation_form';
+import CourseCreationForm from '@/app/(dashboard)/courses/new/course_creation_form';
 import { HelperMessage } from '@/components/helper-message';
 
 export default function NewCoursePage() {

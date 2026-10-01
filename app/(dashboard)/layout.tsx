@@ -1,34 +1,47 @@
-import { DashboardLayoutClient } from '@/components/dashboard-layout-client';
-import { UserNav } from '@/components/user-nav';
+import { DashboardLayoutClient } from './dashboard-layout-client';
+import { UserNav } from './user-nav';
 import { createClient } from '@/lib/supabase/server';
-import { DashboardBreadcrumbs } from '@/components/dashboard-breadcrumbs';
-import { MobileNav } from '@/components/mobile-nav';
+import { DashboardBreadcrumbs } from '@/app/(dashboard)/breadcrumbs';
+import { MobileNav } from './mobile-nav';
+import { Suspense } from 'react';
 
-export default async function DashboardLayout({
+async function CurrentUserNav() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return <UserNav user={user} />;
+}
+
+export default function DashboardLayout({
   children,
   modal,
 }: {
   children: React.ReactNode;
   modal: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   return (
     <div className="min-h-screen flex flex-col">
       <nav className="w-full h-16 border-b flex items-center px-4 gap-4">
-        <MobileNav />
+        <Suspense>
+          <MobileNav />
+        </Suspense>
         <div className="font-bold text-xl">Eval Scheduler</div>
         <div className="h-6 w-px bg-border hidden md:block" />
-        <DashboardBreadcrumbs />
+        <Suspense>
+          <DashboardBreadcrumbs />
+        </Suspense>
         <div className="ml-auto">
-          <UserNav user={user} />
+          <Suspense>
+            <CurrentUserNav />
+          </Suspense>
         </div>
       </nav>
 
-      <DashboardLayoutClient>{children}</DashboardLayoutClient>
+      <Suspense>
+        <DashboardLayoutClient>{children}</DashboardLayoutClient>
+      </Suspense>
       {modal}
     </div>
   );

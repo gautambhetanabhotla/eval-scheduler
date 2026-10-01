@@ -10,15 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  format,
-  getHours,
-  getMinutes,
-  parseISO,
-  startOfDay,
-  differenceInMinutes,
-  isSameDay,
-} from 'date-fns';
+import { format, parseISO, startOfDay, differenceInMinutes } from 'date-fns';
 import { LayoutList, ChartGantt, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

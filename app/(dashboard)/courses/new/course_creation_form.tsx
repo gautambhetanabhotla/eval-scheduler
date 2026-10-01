@@ -17,6 +17,7 @@ export default function CourseCreationForm() {
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -42,6 +43,7 @@ export default function CourseCreationForm() {
     }
     setLoading(false);
   };
+
   return (
     <>
       {error && (

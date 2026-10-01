@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound, redirect } from 'next/navigation';
-import { ScheduleTabs } from '@/components/schedule-tabs';
+import { ScheduleTabs } from './schedule-tabs';
 
 interface Props {
   children: React.ReactNode;

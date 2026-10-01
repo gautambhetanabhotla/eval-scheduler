@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
-import { ComponentScheduler } from '@/components/component-scheduler';
+import { ComponentScheduler } from './component-scheduler';
 
 interface Props {
   params: Promise<{ code: string; componentName: string }>;

@@ -1,12 +1,14 @@
 # Eval scheduler
 
+An app built as my submission for HackIIIT 2026
+
 ## Problem statement
 
-We do a lot of manual evaluations for course assignments/projects. And to agree upon slots, we either release the time slots through an excel sheet or have students book their preferred slot through calendly or google calendar.
+A lot of manual evaluations for course assignments/projects in IIITH. And to agree upon slots, we either release the time slots through an excel sheet or have students book their preferred slot through calendly or google calendar.
 
 In spite of that, there are some inconveniences that still arise for TAs and students.
 
-1. Rescheduling/swapping: Oftentimes none of the alloted slots work for the student or they might have some emergency come up. In some cases, TAs accept 2 people swapping time slots, but then they would need confirmation from both the students. It's a lot of bookkeepign for them to do.
+1. Rescheduling/swapping: Oftentimes none of the alloted slots work for the student or they might have some emergency come up. In some cases, TAs accept 2 people swapping time slots, but then they would need confirmation from both the students. It's a lot of bookkeeping for them to do.
 2. Evals running behind schedule: Sometimes an eval might take longer than expected and hence the TA will have to inform on, say, Whatsapp, so that the students know to come a little later.
 
 ## Solution
@@ -22,6 +24,7 @@ Apart from the main features, this app also allows one to
 - Browse all upcoming evaluations. This is supported by filtering where you can see what evals you have to take and what you have to give.
 
 ## Tech stack
+
 NextJS + Supabase + Lucide + Shadcn
 
 ## Instructions to run code

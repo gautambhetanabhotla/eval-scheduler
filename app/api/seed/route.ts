@@ -28,6 +28,18 @@ export async function GET() {
     );
   }
 
+  // Claim the course as TA so RLS allows adding components (ignore if already a TA)
+  const { error: taError } = await supabase
+    .from('taships')
+    .insert({ ta: user.id, course: courseCode });
+
+  if (taError && taError.code !== '23505') {
+    return NextResponse.json(
+      { error: `TA Error: ${taError.message}` },
+      { status: 500 }
+    );
+  }
+
   // 2. Ensure Test Component exists
   // Check if it exists first to avoid duplicates if name isn't unique constraint
   let componentId = '';

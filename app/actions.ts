@@ -1,6 +1,6 @@
 'use server';
 
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -53,7 +53,6 @@ export async function unenrollFromCourse(courseCode: string) {
 
 export async function promoteToTA(courseCode: string, userId: string) {
   const supabase = await createClient();
-  const adminClient = await createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -72,19 +71,8 @@ export async function promoteToTA(courseCode: string, userId: string) {
     return { error: 'Only TAs can promote users' };
   }
 
-  // Remove from studentships if exists (use admin client to bypass RLS)
-  const { error: deleteError } = await adminClient
-    .from('studentships')
-    .delete()
-    .eq('student', userId)
-    .eq('course', courseCode);
-
-  if (deleteError) {
-    return { error: `Failed to remove studentship: ${deleteError.message}` };
-  }
-
-  // Add to taships
-  const { error } = await adminClient.from('taships').insert({
+  // Add to taships first so a failure never leaves the user without a role
+  const { error } = await supabase.from('taships').insert({
     ta: userId,
     course: courseCode,
   });
@@ -94,6 +82,17 @@ export async function promoteToTA(courseCode: string, userId: string) {
       return { error: 'User is already a TA' };
     }
     return { error: error.message };
+  }
+
+  // Remove from studentships if exists
+  const { error: deleteError } = await supabase
+    .from('studentships')
+    .delete()
+    .eq('student', userId)
+    .eq('course', courseCode);
+
+  if (deleteError) {
+    return { error: `Failed to remove studentship: ${deleteError.message}` };
   }
 
   revalidatePath(`/courses/${courseCode}`);
@@ -360,140 +359,33 @@ export async function createSwapRequest(
 export async function rejectSwapRequest(requestId: string) {
   const supabase = await createClient();
 
-  const { error } = await supabase
+  // RLS only lets the target student reject a pending request; anything else
+  // updates zero rows rather than raising an error
+  const { data, error } = await supabase
     .from('swap_requests')
     .update({ rejected_at: new Date().toISOString() })
-    .eq('id', requestId);
+    .eq('id', requestId)
+    .select('id');
 
   if (error) return { error: error.message };
+  if (!data?.length) return { error: 'You cannot reject this request' };
   revalidatePath('/requests');
   return { success: true };
 }
 
 export async function acceptSwapRequest(requestId: string) {
-  // Use admin client to bypass RLS for the swap transaction
-  const supabase = await createAdminClient();
+  const supabase = await createClient();
 
-  // 1. Fetch Request with full evaluation and slot details
-  const { data: req, error: reqError } = await supabase
-    .from('swap_requests')
-    .select(
-      `
-      *,
-      src:evaluations!src_eval(id, student, slot, scheduled, ta),
-      target:evaluations!target_eval(id, student, slot, scheduled, ta)
-    `
-    )
-    .eq('id', requestId)
-    .single();
+  // Swaps both evaluations' slots in one transaction. The database function
+  // checks that the caller is the target student of a pending request.
+  const { error } = await supabase.rpc('accept_swap_request', {
+    request_id: requestId,
+  });
 
-  if (reqError || !req) {
-    console.error('Failed to fetch request:', reqError);
-    return { error: 'Request not found' };
+  if (error) {
+    console.error('Failed to accept swap request:', error);
+    return { error: error.message };
   }
-
-  const evalA = req.src; // Requester's evaluation
-  const evalB = req.target; // Target's evaluation (person accepting)
-  console.dir({ evalA, evalB });
-
-  if (!evalA || !evalB) {
-    return { error: 'Could not find evaluations for this request' };
-  }
-
-  console.log('Swapping:', { evalA, evalB });
-
-  // 2. Swap the slot assignments in evaluations
-  // evalA gets evalB's slot details, evalB gets evalA's slot details
-  const { error: updateAError } = await supabase
-    .from('evaluations')
-    .update({
-      slot: evalB.slot,
-      scheduled: evalB.scheduled,
-      ta: evalB.ta,
-    })
-    .eq('id', evalA.id);
-
-  if (updateAError) {
-    console.error('Failed to update evalA:', updateAError);
-    return { error: 'Failed to update source evaluation' };
-  }
-
-  const { error: updateBError } = await supabase
-    .from('evaluations')
-    .update({
-      slot: evalA.slot,
-      scheduled: evalA.scheduled,
-      ta: evalA.ta,
-    })
-    .eq('id', evalB.id);
-
-  if (updateBError) {
-    console.error('Failed to update evalB:', updateBError);
-    return { error: 'Failed to update target evaluation' };
-  }
-
-  // 3. Swap booked_by in slots
-  // Find slots by ID if available, otherwise by ta+scheduled
-  let slotAId = evalA.slot;
-  let slotBId = evalB.slot;
-
-  if (!slotAId) {
-    const { data: foundSlotA } = await supabase
-      .from('slots')
-      .select('id')
-      .eq('ta', evalA.ta)
-      .eq('start', evalA.scheduled)
-      .single();
-    slotAId = foundSlotA?.id;
-  }
-
-  if (!slotBId) {
-    const { data: foundSlotB } = await supabase
-      .from('slots')
-      .select('id')
-      .eq('ta', evalB.ta)
-      .eq('start', evalB.scheduled)
-      .single();
-    slotBId = foundSlotB?.id;
-  }
-
-  console.log('Swapping slots:', { slotAId, slotBId });
-
-  if (slotAId && slotBId) {
-    const { error: slotAError } = await supabase
-      .from('slots')
-      .update({ booked_by: evalB.student })
-      .eq('id', slotAId);
-    if (slotAError) console.error('Failed to update slotA:', slotAError);
-
-    const { error: slotBError } = await supabase
-      .from('slots')
-      .update({ booked_by: evalA.student })
-      .eq('id', slotBId);
-    if (slotBError) console.error('Failed to update slotB:', slotBError);
-
-    // Also update the slot FK in evaluations if they were null
-    if (!evalA.slot) {
-      await supabase
-        .from('evaluations')
-        .update({ slot: slotBId })
-        .eq('id', evalA.id);
-    }
-    if (!evalB.slot) {
-      await supabase
-        .from('evaluations')
-        .update({ slot: slotAId })
-        .eq('id', evalB.id);
-    }
-  } else {
-    console.error('Could not find slots to swap');
-  }
-
-  // 4. Mark request accepted
-  await supabase
-    .from('swap_requests')
-    .update({ accepted_at: new Date().toISOString() })
-    .eq('id', requestId);
 
   revalidatePath('/requests');
   revalidatePath('/courses');

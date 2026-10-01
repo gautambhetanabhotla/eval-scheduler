@@ -10,8 +10,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ArrowRight, Clock } from 'lucide-react';
-import { SwapRequestActions } from '@/components/swap-request-actions';
-import { NewSwapRequestForm } from '@/components/new-swap-request-form';
+import { SwapRequestActions } from './swap-request-actions';
+import { NewSwapRequestForm } from '@/app/(dashboard)/requests/new-swap-request-form';
 
 export default async function RequestsPage() {
   const supabase = await createClient();

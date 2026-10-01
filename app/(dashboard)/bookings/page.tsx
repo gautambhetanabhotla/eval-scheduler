@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
-import { SlotsManager } from '@/components/slots-manager';
-import { SlotsList } from '@/components/slots-list';
+import { SlotsManager } from './slots-manager';
+import { SlotsList } from './slots-list';
 import { Separator } from '@/components/ui/separator';
 
 export default async function BookingsPage() {

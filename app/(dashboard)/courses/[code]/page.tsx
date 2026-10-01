@@ -1,17 +1,14 @@
-import { AddComponentDialog } from '@/components/add-component-dialog';
-import { EnrollStudentDialog } from '@/components/enroll-student-dialog';
+import { AddComponentDialog } from './add-component-dialog';
+import { EnrollStudentDialog } from './enroll-student-dialog';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import {
-  ParticipantsTable,
-  Participant,
-} from '@/components/participants-table';
-import { EnrollButton } from '@/components/enroll-button';
-import { UnenrollButton } from '@/components/unenroll-button';
+import { ParticipantsTable, Participant } from './participants-table';
+import { EnrollButton } from './enroll-button';
+import { UnenrollButton } from './unenroll-button';
 import { Suspense } from 'react';
-import { RealtimeEvaluationsList } from '@/components/realtime-evaluations-list';
+import { RealtimeEvaluationsList } from './realtime-evaluations-list';
 
 interface Props {
   params: Promise<{ code: string }>;
